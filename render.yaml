@@ -2,7 +2,7 @@ services:
   - type: web_service
     name: qa-job-scraper
     branch: main
-    repo: https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}
+    repo: https://github.com/AtmanTest/qa-job-scraper.git
     autoDeploy: yes
     env: python
     plan: free
@@ -13,11 +13,31 @@ services:
       pip install -r requirements.txt
     startCommand: |
       cd backend
-      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+      gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
       - key: SUPABASE_URL
-        value: ${SUPABASE_URL}
+        sync: false
       - key: SUPABASE_KEY
-        value: ${SUPABASE_KEY}
+        sync: false
       - key: CRON_TOKEN
-        value: ${CRON_TOKEN}
+        sync: false
+
+  - type: cron
+    name: qa-job-scraper-cron
+    branch: main
+    repo: https://github.com/AtmanTest/qa-job-scraper.git
+    env: python
+    plan: free
+    region: oregon
+    schedule: "0 * * * *"
+    buildCommand: |
+      cd backend
+      pip install -r requirements.txt
+    runCommand: |
+      cd backend
+      python scraper.py
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
