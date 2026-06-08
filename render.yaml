@@ -1,0 +1,23 @@
+services:
+  - type: web_service
+    name: qa-job-scraper
+    branch: main
+    repo: https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}
+    autoDeploy: yes
+    env: python
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    buildCommand: |
+      cd backend
+      pip install -r requirements.txt
+    startCommand: |
+      cd backend
+      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+    envVars:
+      - key: SUPABASE_URL
+        value: ${SUPABASE_URL}
+      - key: SUPABASE_KEY
+        value: ${SUPABASE_KEY}
+      - key: CRON_TOKEN
+        value: ${CRON_TOKEN}

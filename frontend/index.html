@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA Jobs Dashboard</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+header { margin-bottom: 24px; }
+h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.subtitle { color: #94a3b8; font-size: 14px; margin-top: 4px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat { background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155; }
+.stat-value { font-size: 28px; font-weight: 700; color: #38bdf8; }
+.stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+.controls { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+input, select { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; padding: 10px 14px; border-radius: 8px; font-size: 14px; outline: none; }
+input:focus, select:focus { border-color: #38bdf8; }
+input { flex: 1; min-width: 200px; }
+
+.jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+.job-card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 20px; transition: all .2s; cursor: pointer; }
+.job-card:hover { border-color: #38bdf8; transform: translateY(-2px); }
+.job-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; line-height: 1.4; }
+.job-company { color: #38bdf8; font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.job-meta { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.badge { background: #0f172a; color: #94a3b8; padding: 4px 10px; border-radius: 999px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #334155; }
+.badge.source { color: #a78bfa; border-color: #5b21b6; }
+.job-description { color: #94a3b8; font-size: 13px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-top: 10px; }
+.empty { text-align: center; padding: 60px 20px; color: #64748b; }
+
+.loading, .error { text-align: center; padding: 40px; }
+.error { color: #f87171; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>QA Jobs Dashboard</h1>
+    <div class="subtitle">Missions ingénieur test / testeur / QA</div>
+  </header>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="stat-value" id="stat-total">-</div><div class="stat-label">Offres</div></div>
+    <div class="stat"><div class="stat-value" id="stat-sources">-</div><div class="stat-label">Sources</div></div>
+    <div class="stat"><div class="stat-value" id="stat-last">-</div><div class="stat-label">Dernière MAJ</div></div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Rechercher : titre, entreprise, lieu...">
+    <select id="source-filter"><option value="">Toutes sources</option></select>
+  </div>
+
+  <div id="jobs-container">
+    <div class="loading">Chargement…</div>
+  </div>
+</div>
+
+<script>
+const API = window.API_BASE || "";
+const state = { jobs: [], filtered: [], sources: new Set() };
+
+async function loadJobs() {
+  try {
+    const res = await fetch(`${API}/api/jobs?limit=200`);
+    const data = await res.json();
+    state.jobs = data.jobs || [];
+    state.jobs.forEach(j => {
+      if (j.source) state.sources.add(j.source);
+    });
+    renderStats();
+    populateSourceFilter();
+    applyFilters();
+  } catch (e) {
+    document.getElementById("jobs-container").innerHTML = `<div class="error">${e.message}</div>`;
+  }
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch(`${API}/api/stats`);
+    const data = await res.json();
+    document.getElementById("stat-total").textContent = data.total ?? "-";
+    document.getElementById("stat-sources").textContent = Object.keys(data.sources || {}).length;
+    document.getElementById("stat-last").textContent = data.last_fetch ? new Date(data.last_fetch).toLocaleString("fr-FR") : "-";
+  } catch {}
+}
+
+function renderStats() {
+  document.getElementById("stat-total").textContent = state.jobs.length;
+  document.getElementById("stat-sources").textContent = state.sources.size;
+  if (state.jobs.length) {
+    const latest = state.jobs[0].fetched_at;
+    document.getElementById("stat-last").textContent = latest ? new Date(latest).toLocaleString("fr-FR") : "-";
+  }
+}
+
+function populateSourceFilter() {
+  const sel = document.getElementById("source-filter");
+  sel.innerHTML = `<option value="">Toutes sources (${state.jobs.length})</option>`;
+  const counts = {};
+  state.jobs.forEach(j => { counts[j.source] = (counts[j.source] || 0) + 1; });
+  Object.entries(counts).sort((a,b) => b[1]-a[1]).forEach(([src, n]) => {
+    sel.innerHTML += `<option value="${src}">${src} (${n})</option>`;
+  });
+}
+
+function applyFilters() {
+  const q = document.getElementById("search").value.toLowerCase().trim();
+  const src = document.getElementById("source-filter").value;
+  state.filtered = state.jobs.filter(j => {
+    if (src && j.source !== src) return false;
+    if (!q) return true;
+    const hay = `${j.title} ${j.company} ${j.location} ${j.description}`.toLowerCase();
+    return hay.includes(q);
+  });
+  renderJobs();
+}
+
+function renderJobs() {
+  const el = document.getElementById("jobs-container");
+  if (!state.filtered.length) {
+    el.innerHTML = `<div class="empty">Aucune offre trouvée</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="jobs-grid">${state.filtered.map(j => `
+    <a class="job-card" href="${j.url}" target="_blank" rel="noopener">
+      <div class="job-title">${escapeHtml(j.title)}</div>
+      <div class="job-company">${escapeHtml(j.company || "—")}</div>
+      <div class="job-meta">
+        ${j.location ? `<span class="badge">${escapeHtml(j.location)}</span>` : ""}
+        <span class="badge source">${escapeHtml(j.source)}</span>
+      </div>
+      <div class="job-description">${escapeHtml(j.description || "")}</div>
+    </a>
+  `).join("")}</div>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+}
+
+document.getElementById("search").addEventListener("input", applyFilters);
+document.getElementById("source-filter").addEventListener("change", applyFilters);
+
+loadJobs();
+loadStats();
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+name: Hourly QA job refresh
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger refresh endpoint
+        run: |
+          curl -s -X POST "${{ secrets.RENDER_SERVICE_URL }}/api/refresh" \
+            -H "X-CRON-TOKEN: ${{ secrets.CRON_TOKEN }}"
